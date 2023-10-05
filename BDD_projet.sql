@@ -1,4 +1,5 @@
-/*Fonction unify_catalog qui ne prend rien */
+/*Fonction unify_catalog qui ne prend rien en paramètre
+ * return */
 create or replace function unify_catalog () returns void as $$
 begin
 	/*Détruit la table C_ALL si elle existe */
