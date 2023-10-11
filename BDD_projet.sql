@@ -27,6 +27,7 @@ declare
 	tampon VARCHAR;
 	catalog_name_price VARCHAR[][];
 	i INT := 1 ;
+	indicePid int := 1;
 
 	cursDyn REFCURSOR;
 	requete VARCHAR; 
@@ -82,22 +83,25 @@ begin
 	/* Charge dynamiquement les données de chaque catalogue dans C_ALL, connaissant le nom des
 	 * attributs nom et prix précédemment trouvés ;
 	 * */
-	i:= 3 ; -- faire une boucle for de 1 à 3? pour l'instant i = 1 donc pour ligne1 = catalogue 1
-	-- Construction de la requête : retourne un enregistrement composé de pid, attribut name et attribut price
-		requete := 'SELECT '|| i ||' , '|| catalog_name_price[i][2] ||' , '|| catalog_name_price[i][3] ||' FROM '||  catalog_name_price[i][1];
-	--requete := 'INSERT INTO C_ALL VALUES(' || catalog_name_price[i][1] || ', ' || catalog_name_price[i][2] || ','||catalog_name_price[i][3] || ' ) '
-	--|| nomTable;
+    for i in 1..3 loop --on fait la boucle sur les 3 tables
+        -- Construction de la requête : retourne un enregistrement composé de pid, attribut name et attribut price
+        requete := 'SELECT ' || i || ', ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
 
-	-- Parcours du curseur dynamique
-	OPEN cursDyn FOR EXECUTE requete;
-		FETCH cursDyn into res;	
-	WHILE FOUND loop
-		raise notice 'L enregistrement est : %',res;
-		FETCH cursDyn into res;
-	END LOOP;
-	CLOSE cursDyn;
+        -- Parcours du curseur dynamique
+        OPEN cursDyn FOR EXECUTE requete;
+        LOOP
+            FETCH cursDyn into res;
+            EXIT WHEN NOT FOUND;
 
-exception
+            raise notice 'L enregistrement est : %', res;
+            INSERT INTO C_ALL (pid, pname, pprice) VALUES (indicePid, res.pname, res.pprice);
+           	-- FETCH cursDyn into res; --Si on met cette ligne on a pas toutes les lignes 
+           	indicePid := indicePid + 1;
+        END LOOP;
+        CLOSE cursDyn;
+    end loop;
+
+   exception
 		/* Si une requête renvoie null, on arrête le programme 
  		 */
         when NO_DATA_FOUND then
