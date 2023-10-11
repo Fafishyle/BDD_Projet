@@ -83,7 +83,8 @@ begin
 	/* Charge dynamiquement les données de chaque catalogue dans C_ALL, connaissant le nom des
 	 * attributs nom et prix précédemment trouvés ;
 	 * */
-    for i in 1..3 loop --on fait la boucle sur les 3 tables
+    for i in 1..array_length(catalog_name_price, 1) loop --on fait la boucle pour toutes les tables disponible dans catalog_name_price
+
         -- Construction de la requête : retourne un enregistrement composé de pid, attribut name et attribut price
         requete := 'SELECT ' || i || ', ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
 
