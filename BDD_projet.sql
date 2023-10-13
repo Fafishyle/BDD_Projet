@@ -22,16 +22,20 @@ declare
 	 * 		colonne 3 : son attribut avec price
 	 * tampon : chaine de caractère variable tampon
 	 * i : compteur de parcours de table Meta 
+	 * indicePid : compteur du pid dans la table C_ALL
+	 * requete : permet de construire une requete qui renvoie un enregistrement
+	 * code : permet de recuperer trans_code de la table META
 	 */
 	cat VARCHAR;
-	tampon VARCHAR;
 	catalog_name_price VARCHAR[][];
+	tampon VARCHAR;
 	i INT := 1 ;
 	indicePid int := 1;
 
 	cursDyn REFCURSOR;
 	requete VARCHAR; 
 	res record;
+	code VARCHAR;
 
 begin
 	/*Détruit la table C_ALL si elle existe */
@@ -51,7 +55,7 @@ begin
 	catalog_name_price := ARRAY[ [null,null,null], [null, null,null], [null, null,null] ];
 
 	/* Parcourt la table META
-	 * pour obtenir les noms des catalogues , les attributs contennant name et price
+	 * pour obtenir les noms des catalogues , les attributs contenant name et price
 	 */
 	for cat in SELECT table_name FROM meta loop
 		catalog_name_price[i][1] := LOWER(cat);
@@ -81,20 +85,50 @@ begin
 	end loop;
 
 	/* Charge dynamiquement les données de chaque catalogue dans C_ALL, connaissant le nom des
-	 * attributs nom et prix précédemment trouvés ;
+	 * attributs nom et prix précédemment trouvés
 	 * */
     for i in 1..array_length(catalog_name_price, 1) loop --on fait la boucle pour toutes les tables disponible dans catalog_name_price
 
         -- Construction de la requête : retourne un enregistrement composé de pid, attribut name et attribut price
         requete := 'SELECT ' || i || ', ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
 
-        -- Parcours du curseur dynamique
+       -- Parcours du curseur dynamique
         OPEN cursDyn FOR EXECUTE requete;
         LOOP
             FETCH cursDyn into res;
             EXIT WHEN NOT FOUND;
 
             raise notice 'L enregistrement est : %', res;
+           /* On regarde dans la table meta si la table ou on est a des codes specifiques
+            * a appliquer a ses données avant de les inserer dans la table C_ALL
+            */
+            SELECT trans_code INTO code 
+          	FROM meta 
+         	WHERE table_name = UPPER(catalog_name_price[i][1]);
+  
+         
+       	 	/* On regarde que le code qui correspond à la table ou l'onest, n'est pas null
+          	*/
+			IF code IS NOT NULL then
+				/* Le code contient 'CAP'
+				 * on met le nom du produit en majuscule
+				 * en modifiant la valeur res.pname
+				 */
+           		IF code LIKE '%CAP%' THEN
+           			res.pname := UPPER(res.pname);
+           		END IF;
+	           	/* Le code contient 'CUP'
+				 * on fait une conversion dollars vers euro du prix du produit
+				 * en modifiant res.pprice
+				 */
+           		IF code LIKE '%CUR%' THEN
+           			res.pprice := res.pprice / 1.05;
+           		END IF;
+			END IF;
+			/* On peut inserer dynamiquement les données dans C_ALL
+			 * après avoir effectué toutes les modifications nécessaires
+			 * grace au trans_code
+			 */
             INSERT INTO C_ALL (pid, pname, pprice) VALUES (indicePid, res.pname, res.pprice);
            	-- FETCH cursDyn into res; --Si on met cette ligne on a pas toutes les lignes 
            	indicePid := indicePid + 1;
