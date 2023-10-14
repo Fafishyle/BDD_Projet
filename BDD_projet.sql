@@ -1,14 +1,3 @@
-/* Type catalog_attribute 
- * cat : le nom du catalogue
- * cat_name : le nom de l'attribut contennant "name" 
- * cat_price : le nom de l'attribut contennant "price" 
- */
-/*CREATE TYPE catalog_attribute AS (
-	cat VARCHAR(255),
-	cat_name VARCHAR(50),
-	cat_price numeric(8,2) 
- ); */
-
 /* Fonction unify_catalog 
  * ne prend rien en paramètre
  * ne retourne rien 
@@ -87,7 +76,7 @@ begin
 	/* Charge dynamiquement les données de chaque catalogue dans C_ALL, connaissant le nom des
 	 * attributs nom et prix précédemment trouvés
 	 * */
-    for i in 1..array_length(catalog_name_price, 1) loop --on fait la boucle pour toutes les tables disponible dans catalog_name_price
+    for i in 1..array_length(catalog_name_price, 1) loop --on fait la boucle pour toutes les tables disponibles dans catalog_name_price
 
         -- Construction de la requête : retourne un enregistrement composé de pid, attribut name et attribut price
         requete := 'SELECT ' || i || ', ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
@@ -99,15 +88,15 @@ begin
             EXIT WHEN NOT FOUND;
 
             raise notice 'L enregistrement est : %', res;
-           /* On regarde dans la table meta si la table ou on est a des codes specifiques
-            * a appliquer a ses données avant de les inserer dans la table C_ALL
+           /* On regarde dans la table meta si la table où on est possède des codes specifiques
+            * à appliquer à ses données avant de les inserer dans la table C_ALL
             */
             SELECT trans_code INTO code 
           	FROM meta 
          	WHERE table_name = UPPER(catalog_name_price[i][1]);
   
          
-       	 	/* On regarde que le code qui correspond à la table ou l'onest, n'est pas null
+       	 	/* On regarde si le code qui correspond à la table où l'on est, n'est pas null
           	*/
 			IF code IS NOT NULL then
 				/* Le code contient 'CAP'
