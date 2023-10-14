@@ -5,6 +5,7 @@
 create or replace function unify_catalog() returns void as $$
 declare
 	/* cat : nom de catalogue
+	 * count_catalog : 
 	 * catalog_name_price :  tableau bidimensionnel à 3 colonnes: 
 	 * 		colonne 1 : des noms de catalogue
 	 * 		colonne 2 : son attribut avec name
@@ -12,13 +13,16 @@ declare
 	 * tampon : chaine de caractère variable tampon
 	 * i : compteur de parcours de table Meta 
 	 * indicePid : compteur du pid dans la table C_ALL
+	 * cursDyn : 
 	 * requete : permet de construire une requete qui renvoie un enregistrement
+	 * res :
 	 * code : permet de recuperer trans_code de la table META
 	 */
 	cat VARCHAR;
 	catalog_name_price VARCHAR[][];
+	count_catalog INT := 0;
 	tampon VARCHAR;
-	i INT := 1 ;
+	i INT := 1;
 	indicePid int := 1;
 
 	cursDyn REFCURSOR;
@@ -39,22 +43,29 @@ begin
 	);
 	
 	/*
-	 * Initialisation du tableau bidimensionnel catalog_name_price
+	 * Mettre le nombre de catalogue dans count_catalog
 	 */
-	catalog_name_price := ARRAY[ [null,null,null], [null, null,null], [null, null,null] ];
+	select count(*) into count_catalog from meta;
 
+	/*
+	 * Initialisation du tableau bidimensionnel catalog_name_price
+	 * 	de 3 colonnes : "catalog", "name" et "price"
+	 * 	de count_catalog lignes, où n est le nombre de catalogue dans le tableau meta 
+	 *  de valeur null 
+	 */
+	catalog_name_price := array_fill(NULL::int, ARRAY[count_catalog, 3]);
+	
 	/* Parcourt la table META
-	 * pour obtenir les noms des catalogues , les attributs contenant name et price
+	 * pour obtenir les noms des catalogues , 
+	 * les attributs contenant name et price
 	 */
 	for cat in SELECT table_name FROM meta loop
 		catalog_name_price[i][1] := LOWER(cat);
 		raise notice 'Pour le catalogue : %',catalog_name_price[i][1];
-		
 
 		/* Récupère dans le schéma de chaque catalogue
-	 	* les noms des attributs qui contiennent name et price, respectivement
-	 	*/ 
-
+	 	 * les noms des attributs qui contiennent name et price, respectivement
+	 	 */ 
 		SELECT column_name into tampon
 		FROM information_schema.columns
 		WHERE table_name = LOWER(cat)
@@ -73,31 +84,36 @@ begin
 		i:= i + 1;
 	end loop;
 
-	/* Charge dynamiquement les données de chaque catalogue dans C_ALL, connaissant le nom des
-	 * attributs nom et prix précédemment trouvés
-	 * */
-    for i in 1..array_length(catalog_name_price, 1) loop --on fait la boucle pour toutes les tables disponibles dans catalog_name_price
+	/* Pour chaque table disponible dans catalog_name_price
+	 * on charge dynamiquement les données dans C_ALL, 
+	 * à partir des noms des attributs name et price précédemment trouvés
+	 */
+    for i in 1..array_length(catalog_name_price, 1) loop 
 
-        -- Construction de la requête : retourne un enregistrement composé de pid, attribut name et attribut price
+        /*
+         * Construction de la requête du curseur dynamique
+         * requete retournera un enregistrement (numéro du catalogue, attribut name, attribut price)
+         */
         requete := 'SELECT ' || i || ', ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
-
-       -- Parcours du curseur dynamique
+        if requete is null then
+			raise exception 'Le catalogue % ou son attribut, de la table META, n existe pas.', catalog_name_price[i][1] ;
+		end if;
         OPEN cursDyn FOR EXECUTE requete;
+       	FETCH cursDyn into res;
         LOOP
-            FETCH cursDyn into res;
             EXIT WHEN NOT FOUND;
-
-            raise notice 'L enregistrement est : %', res;
-           /* On regarde dans la table meta si la table où on est possède des codes specifiques
-            * à appliquer à ses données avant de les inserer dans la table C_ALL
+            raise notice 'L enregistrement (numero catalogue, nom , prix) est : %', res;
+           
+           /* Verifie dans la table META 
+            * si on doit appliquer des transformations aux données
+            * avant de les inserer dans la table C_ALL
             */
-            SELECT trans_code INTO code 
+            SELECT trans_code INTO code
           	FROM meta 
          	WHERE table_name = UPPER(catalog_name_price[i][1]);
-  
-         
-       	 	/* On regarde si le code qui correspond à la table où l'on est, n'est pas null
-          	*/
+  		  /*
+  		   * Faire un switch?
+  		   */
 			IF code IS NOT NULL then
 				/* Le code contient 'CAP'
 				 * on met le nom du produit en majuscule
@@ -114,12 +130,15 @@ begin
            			res.pprice := res.pprice / 1.05;
            		END IF;
 			END IF;
+		
 			/* On peut inserer dynamiquement les données dans C_ALL
 			 * après avoir effectué toutes les modifications nécessaires
 			 * grace au trans_code
 			 */
             INSERT INTO C_ALL (pid, pname, pprice) VALUES (indicePid, res.pname, res.pprice);
            	-- FETCH cursDyn into res; --Si on met cette ligne on a pas toutes les lignes 
+            raise notice '		et en appliquant les transformations : %', res;
+            FETCH cursDyn into res;
            	indicePid := indicePid + 1;
         END LOOP;
         CLOSE cursDyn;
@@ -133,23 +152,7 @@ begin
 end
 $$language plpgsql;
 
-select unify_catalog();
-
 /*
-create or replace function f()returns void as $$
-declare
-test varchar;
-cat varchar[][];
-
-begin
-cat := ARRAY[ [null,null], [null, null], [null, null] ];
-cat[1][1] := 'c2';
-		SELECT column_name into test
-		FROM information_schema.columns
-		WHERE table_name = 'c1';
-		cat[1][2] := test;
-	raise notice '%',cat[1][2];
-end
-
-$$ language plpgsql;
-select f();*/
+ * Teste la fonction unify_catalog, fait des affichages
+ */
+select unify_catalog();
