@@ -13,7 +13,6 @@ DECLARE
 	/* cat : nom de catalogue
 	 * att_name : attribut d'un catalogue contenant name
 	 * att_price : attribut d'un catalogue contenant price
-	 * key_pid : clef primaire de la table C_ALL
 	 * cursDyn : curseur dynamique
 	 * requete : permet de construire une requête qui cherche le nom de l'attribut name et le nom de l'attribut price
 	 * res : enregistrement resultat (pname, pprice)
@@ -22,7 +21,6 @@ DECLARE
 	cat VARCHAR;
 	att_name VARCHAR;
 	att_price VARCHAR;
-	key_pid INT := 1;
 	cursDyn REFCURSOR;
 	requete VARCHAR; 
 	res RECORD;
@@ -31,10 +29,10 @@ DECLARE
 BEGIN
 	-- Détruit la table C_ALL si elle existe
 	DROP TABLE IF EXISTS C_ALL;
-	-- Crée une table C_ALL
+	-- Crée une table C_ALL où le pid est généré automatiquement
 	CREATE TABLE C_ALL
 	(
-    	pid NUMERIC(5) PRIMARY KEY,
+    	pid SERIAL PRIMARY KEY,
     	pname VARCHAR(50),
     	pprice NUMERIC(8,2)
 	);
@@ -76,7 +74,7 @@ BEGIN
        	FETCH cursDyn INTO res;
         LOOP
             EXIT WHEN NOT FOUND;
-            RAISE NOTICE '- Un tuple trouvé est	: (%,%,%)', key_pid, res.pname, res.pprice;
+            RAISE NOTICE '- Un tuple trouvé est	: (%,%)', res.pname, res.pprice;
            /* Verifie dans la table META 
             * si des transformations sont à appliquer  aux données
             */
@@ -92,14 +90,13 @@ BEGIN
            			-- Convertit le prix (qui est en dollard), en euros 
            			res.pprice := res.pprice / 1.05;
            		END IF;
-           		RAISE NOTICE '		transformé en	: (%,%,%)', key_pid, res.pname, res.pprice;
+           		RAISE NOTICE '		transformé en	: (%,%)', res.pname, res.pprice;
 			END IF;
 			/* Insère les données dans C_ALL
 			 * après avoir effectué toutes les modifications nécessaires
 			 */
-            INSERT INTO C_ALL (pid, pname, pprice) VALUES (key_pid, res.pname, res.pprice);
+            INSERT INTO C_ALL (pname, pprice) VALUES (res.pname, res.pprice);
             FETCH cursDyn INTO res;
-           	key_pid := key_pid + 1;
         END LOOP;
         CLOSE cursDyn;
       RAISE NOTICE '_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _';
