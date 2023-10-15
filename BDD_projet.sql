@@ -7,24 +7,17 @@
 create or replace function unify_catalog() returns void as $$
 declare
 	/* cat : nom de catalogue
-	 * count_catalog : nombre total de catalogue dans la table META
-	 * catalog_name_price :  tableau bidimensionnel à 3 colonnes: 
-	 * 		colonne 1 : des noms de catalogue
-	 * 		colonne 2 : son attribut avec name
-	 * 		colonne 3 : son attribut avec price
-	 * tampon : chaine de caractère variable tampon
-	 * i : compteur de parcours de table Meta 
-	 * indicePid : compteur du curseur dynamique, clef primaire de la table C_ALL
+	 * att_name : attribut d'un catalogue contennant name
+	 * att_price : attribut d'un catalogue contennant price
+	 * indicePid : clef primaire de la table C_ALL
 	 * cursDyn : curseur dynamique
 	 * requete : permet de construire une requete qui cherche à partir du pid, du nom de l'attribut name et du nom de l'attribut pprice
 	 * res : enregistrement resultat (pid, pname, pprice) à charger dans la table
 	 * code : permet de récupérer trans_code de la table META
 	 */
 	cat VARCHAR;
-	catalog_name_price VARCHAR[][];
-	count_catalog INT := 0;
-	tampon VARCHAR;
-	i INT := 1;
+	att_name VARCHAR;
+	att_price VARCHAR;
 	indicePid int := 1;
 	cursDyn REFCURSOR;
 	requete VARCHAR; 
@@ -40,46 +33,40 @@ BEGIN
     	pid NUMERIC(5)PRIMARY KEY,
     	pname VARCHAR(50),
     	pprice NUMERIC(8,2)
-	);	
-	-- Insére le nombre de catalogue de la table META dans count_catalog
-	select count(*) into count_catalog from meta;
-	/* Initialisation du tableau bidimensionnel catalog_name_price
-	 * 	de 3 colonnes : "catalog", "name" et "price"
-	 * 	de count_catalog lignes, où count_catalog est le nombre total de catalogue
-	 *  et de valeur null 
-	 */
-	catalog_name_price := array_fill(NULL::int, ARRAY[count_catalog, 3]);
+	);
 	-- Parcourt la table META
 	for cat in SELECT table_name FROM meta loop
-		catalog_name_price[i][1] := LOWER(cat);
-		raise notice 'Pour le catalogue : %',catalog_name_price[i][1];
+		cat := LOWER(cat);
+		raise notice 'Pour le catalogue : %',cat;
 		/* Récupère dans le schéma de chaque catalogue
 	 	 * les noms des attributs qui contiennent name
 	 	 */ 
-		SELECT column_name into tampon
+		SELECT column_name into att_name
 		FROM information_schema.columns
-		WHERE table_name = LOWER(cat)
+		WHERE table_name = cat
 		and 
 		column_name ILIKE '%name%';
-		catalog_name_price[i][2] := tampon;
-		raise notice '- d attribut name : %',catalog_name_price[i][2];
+		raise notice '- d attribut name : %',att_name;
 		/* Récupère dans le schéma de chaque catalogue
 	 	 * les noms des attributs qui contiennent price
 	 	 */ 
-		SELECT column_name into tampon
+		SELECT column_name into att_price
 		FROM information_schema.columns 
-		WHERE table_name = LOWER(cat)
+		WHERE table_name = cat
 		and column_name ILIKE '%price%';
-		catalog_name_price[i][3] := tampon;
-		raise notice '- d attribut price : %',catalog_name_price[i][3];
+		raise notice '- d attribut price : %',att_price;
 		/* Pour chaque table disponible dans catalog_name_price
 	 	 * charge dynamiquement les données dans C_ALL, 
 	 	 * à partir des noms des attributs name et price précédemment trouvés 
          * Construction de la requête du curseur dynamique
          */
-        requete := 'SELECT ' || indicePid || 'AS pid, ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
+        requete := 'SELECT ' 
+        			|| indicePid || 'AS pid, '
+       				|| att_name  || ' AS pname, ' 
+       				|| att_price || ' AS pprice 
+					FROM ' || cat;
         if requete is null then
-			raise exception 'Le catalogue % (ou un de ses attributs) de la table META, n existe pas.', catalog_name_price[i][1] ;
+			raise exception 'Le catalogue % (ou un de ses attributs) de la table META, n existe pas.', cat ;
 		end if;
         OPEN cursDyn FOR EXECUTE requete;
        	FETCH cursDyn into res;
@@ -92,8 +79,8 @@ BEGIN
             * avant de les inserer dans la table C_ALL
             */
             SELECT trans_code INTO code
-          	FROM meta 
-         	WHERE table_name = UPPER(catalog_name_price[i][1]);  		   
+          	FROM meta
+         	WHERE table_name = UPPER(cat);  		   
 			IF code IS NOT NULL then
 				/* Si code contient 'CAP'
 				 * mettre le nom du produit en majuscule
@@ -107,8 +94,8 @@ BEGIN
            		IF code LIKE '%CUR%' THEN
            			res.pprice := res.pprice / 1.05;
            		END IF;
+           		raise notice '	et en appliquant les transformations : % .', res;
 			END IF;
-        	raise notice '	et en appliquant les transformations : % .', res;
 			/* Insère les données dans C_ALL
 			 * après avoir effectué toutes les modifications nécessaires
 			 */
@@ -117,7 +104,6 @@ BEGIN
            	indicePid := indicePid + 1;
         END LOOP;
         CLOSE cursDyn;
-       i:= i + 1;
       raise notice E'\n';
     end loop;
 
