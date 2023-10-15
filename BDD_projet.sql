@@ -1,17 +1,17 @@
 /* Fonction unify_catalog 
  * ne prend rien en paramètre
- * intégre dans la table C_ALL (un seul catalogue unifié) les données de différents catalogues
+ * intègre dans la table C_ALL (un seul catalogue unifié) les données de différents catalogues
  * fait des affichages
  * ne retourne rien
  */
-create or replace function unify_catalog() returns void as $$
+CREATE OR REPLACE FUNCTION unify_catalog() RETURNS VOID AS $$
 DECLARE
 	/* cat : nom de catalogue
-	 * att_name : attribut d'un catalogue contennant name
-	 * att_price : attribut d'un catalogue contennant price
+	 * att_name : attribut d'un catalogue contenant name
+	 * att_price : attribut d'un catalogue contenant price
 	 * key_pid : clef primaire de la table C_ALL
 	 * cursDyn : curseur dynamique
-	 * requete : permet de construire une requete qui cherche le nom de l'attribut name et le nom de l'attribut price
+	 * requete : permet de construire une requête qui cherche le nom de l'attribut name et le nom de l'attribut price
 	 * res : enregistrement resultat (pname, pprice)
 	 * code : permet de récupérer trans_code de la table META
 	 */
@@ -21,40 +21,41 @@ DECLARE
 	key_pid INT := 1;
 	cursDyn REFCURSOR;
 	requete VARCHAR; 
-	res record;
+	res RECORD;
 	code VARCHAR;
 
 BEGIN
 	-- Détruit la table C_ALL si elle existe
-	DROP TABLE IF exists C_ALL;
+	DROP TABLE IF EXISTS C_ALL;
 	-- Crée une table C_ALL
 	CREATE TABLE C_ALL
 	(
-    	pid NUMERIC(5)PRIMARY KEY,
+    	pid NUMERIC(5) PRIMARY KEY,
     	pname VARCHAR(50),
     	pprice NUMERIC(8,2)
 	);
+	RAISE NOTICE '___________DEBUT DU PARCOURS___________';
 	-- Parcourt la table META
 	FOR cat IN SELECT table_name FROM meta LOOP
 		cat := LOWER(cat);
-		raise notice 'Pour le catalogue : %',cat;
+		RAISE NOTICE 'Pour le catalogue : %', cat;
 		/* Récupère dans le schéma de chaque catalogue
 	 	 * les noms des attributs qui contiennent name
 	 	 */ 
-		SELECT column_name into att_name
+		SELECT column_name INTO att_name
 		FROM information_schema.columns
 		WHERE table_name = cat
 		AND 
 		column_name ILIKE '%name%';
-		raise notice ' avec l attribut name : %',att_name;
+		RAISE NOTICE ' avec l attribut name	: %', att_name;
 		/* Récupère dans le schéma de chaque catalogue
 	 	 * les noms des attributs qui contiennent price
 	 	 */ 
-		SELECT column_name into att_price
+		SELECT column_name INTO att_price
 		FROM information_schema.columns 
 		WHERE table_name = cat
-		and column_name ILIKE '%price%';
-		raise notice ' avec l attribut price : %',att_price;
+		AND column_name ILIKE '%price%';
+		RAISE NOTICE ' avec l attribut price	: %', att_price;
 		/* Pour chaque table disponible dans catalog_name_price
 	 	 * charge dynamiquement les données dans C_ALL, 
 	 	 * à partir des noms des attributs name et price précédemment trouvés 
@@ -64,54 +65,50 @@ BEGIN
        				|| att_name  || ' AS pname, ' 
        				|| att_price || ' AS pprice 
 					FROM ' || cat;
-        if requete is null then
-			raise exception 'Le catalogue % (ou un de ses attributs) de la table META, n existe pas.', cat ;
-		end if;
+        IF requete IS NULL THEN
+			RAISE EXCEPTION 'Le catalogue % (ou un de ses attributs) de la table META, n existe pas.', cat ;
+		END IF;
         OPEN cursDyn FOR EXECUTE requete;
-       	FETCH cursDyn into res;
+       	FETCH cursDyn INTO res;
         LOOP
             EXIT WHEN NOT FOUND;
-            raise notice '- Le tuple trouvé est : (%,%,%)',key_pid, res.pname,res.pprice;
+            RAISE NOTICE '- Un tuple trouvé est	: (%,%,%)', key_pid, res.pname, res.pprice;
            /* Verifie dans la table META 
             * si des transformations sont à appliquer  aux données
-            * avant de les inserer dans la table C_ALL
             */
             SELECT trans_code INTO code
           	FROM meta
          	WHERE table_name = UPPER(cat);  		   
-			IF code IS NOT NULL then
-				/* Si code contient 'CAP'
-				 * mettre le nom du produit en majuscule
-				 */
-           		IF code LIKE '%CAP%' THEN
+			IF code IS NOT NULL THEN
+           		IF code LIKE '%CAP%' then
+           			-- Met en majuscule
            			res.pname := UPPER(res.pname);
            		END IF;
-	           	/* Si code contient 'CUR'
-				 * convertit le prix du produit (qui est en dollars) en euro
-				 */
-           		IF code LIKE '%CUR%' THEN
+           		IF code LIKE '%CUR%' then
+           			-- Convertit le prix (qui est en dollard), en euros 
            			res.pprice := res.pprice / 1.05;
            		END IF;
-           		raise notice '	transformé en : (%,%,%)',key_pid, res.pname,res.pprice;
+           		RAISE NOTICE '		transformé en	: (%,%,%)', key_pid, res.pname, res.pprice;
 			END IF;
 			/* Insère les données dans C_ALL
 			 * après avoir effectué toutes les modifications nécessaires
 			 */
             INSERT INTO C_ALL (pid, pname, pprice) VALUES (key_pid, res.pname, res.pprice);
-            FETCH cursDyn into res;
+            FETCH cursDyn INTO res;
            	key_pid := key_pid + 1;
         END LOOP;
         CLOSE cursDyn;
-      raise notice E'\n';
-    end loop;
+      RAISE NOTICE '_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _';
+    END LOOP;
+    RAISE NOTICE '____________FIN DU PARCOURS____________';
 
    EXCEPTION
-		-- Si une requête renvoie null, on arrête le programme 
-        when NO_DATA_FOUND then
-            raise exception 'Aucune donnée trouvée dans la requête.';
-           
+		-- Si une requête renvoie null, arrête le programme 
+        WHEN NO_DATA_FOUND THEN
+            RAISE EXCEPTION 'Aucune donnée trouvée dans la requête.';
+
 END
-$$language plpgsql;
+$$ LANGUAGE plpgsql;
 
 -- Teste la fonction unify_catalog, voir la sortie pour les affichages
 SELECT unify_catalog();
