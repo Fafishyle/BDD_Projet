@@ -1,6 +1,10 @@
-/* Fonction unify_catalog 
+/* RANDRIAMITANDRINA Finaritra
+ * VIVIER Maude
+ * M1 Informatique - Bases de données avancées
+ * 
+ * Fonction unify_catalog 
  * ne prend rien en paramètre
- * intègre dans la table C_ALL (un seul catalogue unifié) les données de différents catalogues
+ * recrée et intègre dans la table C_ALL les données de différents catalogues
  * fait des affichages
  * ne retourne rien
  */
@@ -13,7 +17,7 @@ DECLARE
 	 * cursDyn : curseur dynamique
 	 * requete : permet de construire une requête qui cherche le nom de l'attribut name et le nom de l'attribut price
 	 * res : enregistrement resultat (pname, pprice)
-	 * code : permet de récupérer trans_code de la table META
+	 * code : permet de récupérer le code de transformation de la table META
 	 */
 	cat VARCHAR;
 	att_name VARCHAR;
@@ -106,6 +110,8 @@ BEGIN
 		-- Si une requête renvoie null, arrête le programme 
         WHEN NO_DATA_FOUND THEN
             RAISE EXCEPTION 'Aucune donnée trouvée dans la requête.';
+        WHEN others then
+        	RAISE EXCEPTION 'Une erreur s est produite';
 
 END
 $$ LANGUAGE plpgsql;
