@@ -1,6 +1,7 @@
 /* Fonction unify_catalog 
  * ne prend rien en paramètre
- * ne retourne rien 
+ * intégre dans la table C_ALL (un seul catalogue unifié) différents catalogues
+ * ne retourne rien
  */
 create or replace function unify_catalog() returns void as $$
 declare
@@ -24,17 +25,16 @@ declare
 	tampon VARCHAR;
 	i INT := 1;
 	indicePid int := 1;
-
 	cursDyn REFCURSOR;
 	requete VARCHAR; 
 	res record;
 	code VARCHAR;
 
 begin
-	/*Détruit la table C_ALL si elle existe */
+	-- Détruit la table C_ALL si elle existe
 	DROP TABLE IF exists C_ALL;
 
-	/*Crée une table C_ALL*/
+	-- Crée une table C_ALL
 	CREATE TABLE C_ALL
 	(
     	pid NUMERIC(5)PRIMARY KEY,
@@ -42,16 +42,14 @@ begin
     	pprice NUMERIC(8,2)
 	);
 	
-	/*
-	 * Mettre le nombre de catalogue dans count_catalog
-	 */
+	
+	-- Insérer le nombre de catalogue de la table META dans count_catalog
 	select count(*) into count_catalog from meta;
 
-	/*
-	 * Initialisation du tableau bidimensionnel catalog_name_price
+	/* Initialisation du tableau bidimensionnel catalog_name_price
 	 * 	de 3 colonnes : "catalog", "name" et "price"
-	 * 	de count_catalog lignes, où n est le nombre de catalogue dans le tableau meta 
-	 *  de valeur null 
+	 * 	de count_catalog lignes, où count_catalog est le nombre total de catalogue
+	 *  et de valeur null 
 	 */
 	catalog_name_price := array_fill(NULL::int, ARRAY[count_catalog, 3]);
 	
@@ -81,28 +79,23 @@ begin
 		catalog_name_price[i][3] := tampon;
 		raise notice '- d attribut price : %',catalog_name_price[i][3];
 
-		i:= i + 1;
-	end loop;
-
-	/* Pour chaque table disponible dans catalog_name_price
-	 * on charge dynamiquement les données dans C_ALL, 
-	 * à partir des noms des attributs name et price précédemment trouvés
-	 */
-    for i in 1..array_length(catalog_name_price, 1) loop 
-
-        /*
+		/* Pour chaque table disponible dans catalog_name_price
+	 	 * on charge dynamiquement les données dans C_ALL, 
+	 	 * à partir des noms des attributs name et price précédemment trouvés
+	 	 * 
          * Construction de la requête du curseur dynamique
          * requete retournera un enregistrement (numéro du catalogue, attribut name, attribut price)
          */
-        requete := 'SELECT ' || i || ', ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
+        requete := 'SELECT ' || indicePid || 'AS pid, ' || catalog_name_price[i][2] || ' AS pname, ' || catalog_name_price[i][3] || ' AS pprice FROM ' || catalog_name_price[i][1];
         if requete is null then
-			raise exception 'Le catalogue % ou son attribut, de la table META, n existe pas.', catalog_name_price[i][1] ;
+			raise exception 'Le catalogue % (ou un de ses attributs) de la table META, n existe pas.', catalog_name_price[i][1] ;
 		end if;
         OPEN cursDyn FOR EXECUTE requete;
        	FETCH cursDyn into res;
         LOOP
             EXIT WHEN NOT FOUND;
-            raise notice 'L enregistrement (numero catalogue, nom , prix) est : %', res;
+            res.pid := indicePid;
+            raise notice 'L enregistrement (pid, pname , pprice) est : %', res;
            
            /* Verifie dans la table META 
             * si on doit appliquer des transformations aux données
@@ -110,49 +103,41 @@ begin
             */
             SELECT trans_code INTO code
           	FROM meta 
-         	WHERE table_name = UPPER(catalog_name_price[i][1]);
-  		  /*
-  		   * Faire un switch?
-  		   */
+         	WHERE table_name = UPPER(catalog_name_price[i][1]);  		   
 			IF code IS NOT NULL then
 				/* Le code contient 'CAP'
-				 * on met le nom du produit en majuscule
-				 * en modifiant la valeur res.pname
+				 * mettre le nom du produit en majuscule
 				 */
            		IF code LIKE '%CAP%' THEN
            			res.pname := UPPER(res.pname);
            		END IF;
-	           	/* Le code contient 'CUP'
-				 * on fait une conversion dollars vers euro du prix du produit
-				 * en modifiant res.pprice
+	           	/* Le code contient 'CUR'
+				 * convertit le prix du produit dollars en euro
 				 */
            		IF code LIKE '%CUR%' THEN
            			res.pprice := res.pprice / 1.05;
            		END IF;
 			END IF;
+        	raise notice '	et en appliquant les transformations : % .', res;
 		
-			/* On peut inserer dynamiquement les données dans C_ALL
+			/* Insere les données dans C_ALL
 			 * après avoir effectué toutes les modifications nécessaires
-			 * grace au trans_code
 			 */
-            INSERT INTO C_ALL (pid, pname, pprice) VALUES (indicePid, res.pname, res.pprice);
-           	-- FETCH cursDyn into res; --Si on met cette ligne on a pas toutes les lignes 
-            raise notice '		et en appliquant les transformations : %', res;
+            INSERT INTO C_ALL (pid, pname, pprice) VALUES (res.pid, res.pname, res.pprice);
             FETCH cursDyn into res;
            	indicePid := indicePid + 1;
         END LOOP;
         CLOSE cursDyn;
+       i:= i + 1;
+      raise notice E'\n';
     end loop;
 
    exception
-		/* Si une requête renvoie null, on arrête le programme 
- 		 */
+		-- Si une requête renvoie null, on arrête le programme 
         when NO_DATA_FOUND then
             raise exception 'Aucune donnée trouvée dans la requête.';
 end
 $$language plpgsql;
 
-/*
- * Teste la fonction unify_catalog, fait des affichages
- */
+-- Teste la fonction unify_catalog, fait des affichages
 select unify_catalog();
