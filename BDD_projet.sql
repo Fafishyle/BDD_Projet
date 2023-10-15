@@ -11,8 +11,8 @@ DECLARE
 	 * att_price : attribut d'un catalogue contennant price
 	 * key_pid : clef primaire de la table C_ALL
 	 * cursDyn : curseur dynamique
-	 * requete : permet de construire une requete qui cherche à partir du pid, du nom de l'attribut name et du nom de l'attribut pprice
-	 * res : enregistrement resultat (pid, pname, pprice) à charger dans la table
+	 * requete : permet de construire une requete qui cherche le nom de l'attribut name et le nom de l'attribut price
+	 * res : enregistrement resultat (pname, pprice)
 	 * code : permet de récupérer trans_code de la table META
 	 */
 	cat VARCHAR;
@@ -46,7 +46,7 @@ BEGIN
 		WHERE table_name = cat
 		AND 
 		column_name ILIKE '%name%';
-		raise notice '- d attribut name : %',att_name;
+		raise notice ' avec l attribut name : %',att_name;
 		/* Récupère dans le schéma de chaque catalogue
 	 	 * les noms des attributs qui contiennent price
 	 	 */ 
@@ -54,7 +54,7 @@ BEGIN
 		FROM information_schema.columns 
 		WHERE table_name = cat
 		and column_name ILIKE '%price%';
-		raise notice '- d attribut price : %',att_price;
+		raise notice ' avec l attribut price : %',att_price;
 		/* Pour chaque table disponible dans catalog_name_price
 	 	 * charge dynamiquement les données dans C_ALL, 
 	 	 * à partir des noms des attributs name et price précédemment trouvés 
@@ -71,7 +71,7 @@ BEGIN
        	FETCH cursDyn into res;
         LOOP
             EXIT WHEN NOT FOUND;
-            raise notice 'L enregistrement (pid, pname , pprice) est : (%,%,%)',key_pid, res.pname,res.pprice;
+            raise notice '- Le tuple trouvé est : (%,%,%)',key_pid, res.pname,res.pprice;
            /* Verifie dans la table META 
             * si des transformations sont à appliquer  aux données
             * avant de les inserer dans la table C_ALL
@@ -92,7 +92,7 @@ BEGIN
            		IF code LIKE '%CUR%' THEN
            			res.pprice := res.pprice / 1.05;
            		END IF;
-           		raise notice '	et en appliquant les transformations : (%,%,%)',key_pid, res.pname,res.pprice;
+           		raise notice '	transformé en : (%,%,%)',key_pid, res.pname,res.pprice;
 			END IF;
 			/* Insère les données dans C_ALL
 			 * après avoir effectué toutes les modifications nécessaires
