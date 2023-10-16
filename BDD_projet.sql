@@ -29,7 +29,7 @@ DECLARE
 BEGIN
 	-- Détruit la table C_ALL si elle existe
 	DROP TABLE IF EXISTS C_ALL;
-	-- Crée une table C_ALL où le pid est généré automatiquement
+	-- Créer une table C_ALL où le pid est généré automatiquement
 	CREATE TABLE C_ALL
 	(
     	pid SERIAL PRIMARY KEY,
@@ -37,7 +37,7 @@ BEGIN
     	pprice NUMERIC(8,2)
 	);
 	RAISE NOTICE '___________DEBUT DU PARCOURS___________';
-	-- Parcourt la table META
+	-- Parcours la table META
 	FOR cat IN SELECT table_name FROM meta LOOP
 		cat := LOWER(cat);
 		RAISE NOTICE 'Pour le catalogue : %', cat;
@@ -76,7 +76,7 @@ BEGIN
             EXIT WHEN NOT FOUND;
             RAISE NOTICE '- Un tuple trouvé est	: (%,%)', res.pname, res.pprice;
            /* Verifie dans la table META 
-            * si des transformations sont à appliquer  aux données
+            * si des transformations sont à appliquer aux données
             */
             SELECT trans_code INTO code
           	FROM meta
@@ -87,7 +87,7 @@ BEGIN
            			res.pname := UPPER(res.pname);
            		END IF;
            		IF code LIKE '%CUR%' then
-           			-- Convertit le prix (qui est en dollard), en euros 
+           			-- Convertit le prix (qui est en dollars), en euros 
            			res.pprice := res.pprice / 1.05;
            		END IF;
            		RAISE NOTICE '		transformé en	: (%,%)', res.pname, res.pprice;
